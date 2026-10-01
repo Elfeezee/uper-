@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Rides collection
+    match /rides/{rideId} {
+      // Anyone (even unauthenticated) can read rides for searching
+      allow read: if true;
+
+      // Only authenticated users can create rides
+      allow create: if request.auth != null
+        && request.resource.data.driverId == request.auth.uid
+        && request.resource.data.pricePerSeat is number
+        && request.resource.data.pricePerSeat > 0
+        && request.resource.data.availableSeats is int
+        && request.resource.data.availableSeats > 0
+        && request.resource.data.availableSeats <= 8;
+
+      // Only the ride owner can update or delete their own ride
+      allow update, delete: if request.auth != null
+        && resource.data.driverId == request.auth.uid;
+    }
+
+    // User profiles (wallet, display name, etc.)
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Ride requests collection
+    match /rideRequests/{requestId} {
+      // Drivers can see requests for them, passengers can see their own requests
+      allow read: if request.auth != null
+        && (resource.data.driverId == request.auth.uid || resource.data.passengerId == request.auth.uid);
+
+      // Authenticated passenger can create a request
+      allow create: if request.auth != null
+        && request.resource.data.passengerId == request.auth.uid;
+
+      // Driver or passenger can update request status (accept, decline, cancel)
+      allow update: if request.auth != null
+        && (resource.data.driverId == request.auth.uid || resource.data.passengerId == request.auth.uid);
+
+      // In-App Chat messages subcollection
+      match /messages/{messageId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
+    // Deny all other reads/writes
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
